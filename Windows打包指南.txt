@@ -1,0 +1,92 @@
+PDF下载器 - Windows EXE打包指南
+====================================
+
+## 📋 需要复制到Windows的文件清单
+
+必须文件：
+- pdf_downloader.py (主程序，14KB)
+- requirements.txt (依赖清单，80B)
+- pdf_downloader_win.spec (Windows打包配置，2KB)
+
+数据文件（至少需要一个）：
+- test_urls.xlsx (测试文件，158B)
+- urls.xlsx (主URL文件，9.3KB)
+
+可选文件：
+- fp.txt (自定义文件名，如果有的话)
+
+## 🔧 Windows操作步骤
+
+### 第一步：安装Python环境
+1. 访问 https://www.python.org/downloads/
+2. 下载Python 3.8或更高版本（推荐3.10+）
+3. 安装时务必勾选 "Add Python to PATH"
+4. 验证安装：打开cmd输入 `python --version`
+
+### 第二步：准备工作目录
+1. 在Windows上创建文件夹，如：C:\pdf_downloader
+2. 将上述文件复制到该文件夹
+
+### 第三步：安装依赖
+打开命令提示符(cmd)，进入工作目录：
+```
+cd C:\pdf_downloader
+pip install -r requirements.txt
+pip install pyinstaller
+```
+
+### 第四步：执行打包
+```
+pyinstaller pdf_downloader_win.spec --clean
+```
+
+### 第五步：测试运行
+打包完成后，exe文件在 dist 文件夹中：
+```
+cd dist
+PDF下载器.exe
+```
+
+## 📁 打包后的文件结构
+```
+C:\pdf_downloader\
+├── dist\
+│   └── PDF下载器.exe (最终的可执行文件)
+├── build\ (临时文件，可删除)
+├── pdf_downloader.py
+├── requirements.txt
+├── pdf_downloader_win.spec
+└── test_urls.xlsx
+```
+
+## ⚠️ 常见问题解决
+
+**问题1：提示"python不是内部命令"**
+解决：重新安装Python，确保勾选"Add to PATH"
+
+**问题2：pip安装失败**
+解决：尝试使用 `python -m pip install -r requirements.txt`
+
+**问题3：打包时出现模块错误**
+解决：检查requirements.txt中的依赖是否都已安装
+
+**问题4：exe运行时找不到文件**
+解决：确保Excel文件与exe在同一目录
+
+**问题5：杀毒软件误报**
+解决：将exe添加到杀毒软件白名单
+
+## 🎯 最终结果
+
+成功后您将得到：
+- 独立的Windows exe文件（预计20-30MB）
+- 可在任何Windows电脑运行，无需Python环境
+- 支持拖拽Excel文件到exe同目录使用
+
+## 📝 使用说明
+
+打包完成后的使用方法：
+1. 将 PDF下载器.exe 复制到目标电脑
+2. 在同目录放置 urls.xlsx 或 test_urls.xlsx
+3. 双击运行 PDF下载器.exe
+4. 下载的文件会保存在 pdf_dl 文件夹 

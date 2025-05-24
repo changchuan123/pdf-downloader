@@ -1,0 +1,98 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build Windows executable
+      run: |
+        pyinstaller pdf_downloader_win.spec --clean
+        
+    - name: Test executable
+      run: |
+        cd dist
+        dir
+        echo "测试exe文件是否存在..."
+        if (Test-Path "PDF下载器.exe") {
+          echo "✅ exe文件生成成功"
+          Get-ItemProperty "PDF下载器.exe" | Select-Object Name, Length
+        } else {
+          echo "❌ exe文件未找到"
+          exit 1
+        }
+      shell: pwsh
+      
+    - name: Create release package
+      run: |
+        # 创建完整的发布包
+        mkdir release
+        Copy-Item "dist\PDF下载器.exe" "release\"
+        Copy-Item "test_urls.xlsx" "release\" -ErrorAction SilentlyContinue
+        Copy-Item "urls.xlsx" "release\" -ErrorAction SilentlyContinue
+        Copy-Item "使用说明.txt" "release\" -ErrorAction SilentlyContinue
+        
+        # 创建Windows使用说明
+        @"
+PDF下载器 Windows版使用说明
+============================
+
+使用方法：
+1. 将 PDF下载器.exe 和 Excel文件放在同一文件夹
+2. 双击运行 PDF下载器.exe
+3. 下载的文件会保存在 pdf_dl 文件夹中
+
+Excel文件要求：
+- 文件名：urls.xlsx 或 test_urls.xlsx
+- 第一列：PDF下载链接
+- 第二列：文件名（可选）
+
+注意事项：
+- 如果杀毒软件误报，请添加到白名单
+- 确保网络连接正常
+- 程序支持并发下载，请耐心等待
+
+生成时间：$(Get-Date)
+"@ | Out-File -FilePath "release\README.txt" -Encoding UTF8
+        
+        echo "发布包内容："
+        Get-ChildItem release
+      shell: pwsh
+      
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v3
+      with:
+        name: PDF下载器-Windows-exe
+        path: release/
+        retention-days: 30
+        
+    - name: Upload build logs
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: build-logs
+        path: |
+          build/
+          *.log
+        retention-days: 7 
