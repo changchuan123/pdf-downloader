@@ -55,12 +55,53 @@ jobs:
         Get-ChildItem "release"
       shell: pwsh
       
+    - name: Create ZIP package
+      run: |
+        Compress-Archive -Path "release/*" -DestinationPath "PDF下载器-Windows-v$(Get-Date -Format 'yyyyMMdd-HHmm').zip"
+        Write-Host "ZIP包已创建："
+        Get-ChildItem "*.zip"
+      shell: pwsh
+      
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
       with:
         name: PDF下载器-Windows-exe
         path: release/
         retention-days: 30
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        tag_name: v${{ github.run_number }}
+        name: PDF下载器 Windows版 v${{ github.run_number }}
+        body: |
+          ## PDF批量下载器 Windows版
+          
+          ### 🎉 新功能
+          - 独立的Windows可执行文件，无需Python环境
+          - 支持Excel和TXT格式的URL列表
+          - 并发下载，提高效率
+          - 自动处理文件名冲突
+          
+          ### 📁 包含文件
+          - PDF下载器.exe - 主程序
+          - test_urls.xlsx - 测试URL文件
+          - urls.xlsx - URL模板文件
+          - README.txt - 使用说明
+          
+          ### 🚀 使用方法
+          1. 下载并解压ZIP文件
+          2. 将Excel文件和exe放在同一文件夹
+          3. 双击运行PDF下载器.exe
+          
+          构建时间：${{ github.run_id }}
+        files: |
+          PDF下载器-Windows-v*.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Upload build logs
       uses: actions/upload-artifact@v4
