@@ -233,9 +233,9 @@ class PDFDownloader:
                     print(f"📝 第{index+1}行文件名为空，自动提取为: {filename}")
                 else:
                     filename = str(filename_cell).strip()
-                    # 确保有扩展名
-                    if not filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.jpg', '.png', '.gif')):
-                        filename += '.pdf'
+                    # 注释掉强制添加扩展名的逻辑，保持原有扩展名
+                    # if not filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.jpg', '.png', '.gif')):
+                    #     filename += '.pdf'
                 
                 urls.append(str(url_cell).strip())
                 filenames.append(filename)
@@ -362,12 +362,12 @@ if __name__ == "__main__":
     if "Temp" in project_path or "temp" in project_path or "_MEI" in project_path:
         project_path = os.getcwd()
     
-    # 优先使用测试文件
-    test_file = os.path.join(project_path, "test_urls.xlsx")
-    if os.path.exists(test_file):
-        urls_file = test_file
-    else:
-        urls_file = os.path.join(project_path, "urls.xlsx")
+    # 优先使用正式文件
+    urls_file = os.path.join(project_path, "urls.xlsx")
+    if not os.path.exists(urls_file):
+        test_file = os.path.join(project_path, "test_urls.xlsx")
+        if os.path.exists(test_file):
+            urls_file = test_file
     
     # 创建按时间戳命名的下载文件夹
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
