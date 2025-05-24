@@ -54,27 +54,29 @@ jobs:
         Copy-Item "使用说明.txt" "release\" -ErrorAction SilentlyContinue
         
         # 创建Windows使用说明
-        @"
-PDF下载器 Windows版使用说明
-============================
-
-使用方法：
-1. 将 PDF下载器.exe 和 Excel文件放在同一文件夹
-2. 双击运行 PDF下载器.exe
-3. 下载的文件会保存在 pdf_dl 文件夹中
-
-Excel文件要求：
-- 文件名：urls.xlsx 或 test_urls.xlsx
-- 第一列：PDF下载链接
-- 第二列：文件名（可选）
-
-注意事项：
-- 如果杀毒软件误报，请添加到白名单
-- 确保网络连接正常
-- 程序支持并发下载，请耐心等待
-
-生成时间：$(Get-Date)
-"@ | Out-File -FilePath "release\README.txt" -Encoding UTF8
+        $content = @"
+        PDF下载器 Windows版使用说明
+        ============================
+        
+        使用方法：
+        1. 将 PDF下载器.exe 和 Excel文件放在同一文件夹
+        2. 双击运行 PDF下载器.exe
+        3. 下载的文件会保存在 pdf_dl 文件夹中
+        
+        Excel文件要求：
+        - 文件名：urls.xlsx 或 test_urls.xlsx
+        - 第一列：PDF下载链接
+        - 第二列：文件名（可选）
+        
+        注意事项：
+        - 如果杀毒软件误报，请添加到白名单
+        - 确保网络连接正常
+        - 程序支持并发下载，请耐心等待
+        
+        生成时间：$(Get-Date)
+        "@
+        
+        $content | Out-File -FilePath "release\README.txt" -Encoding UTF8
         
         echo "发布包内容："
         Get-ChildItem release
