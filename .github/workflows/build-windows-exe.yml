@@ -27,59 +27,32 @@ jobs:
         pip install pyinstaller
         
     - name: Build Windows executable
-      run: |
-        pyinstaller pdf_downloader_win.spec --clean
+      run: pyinstaller pdf_downloader_win.spec --clean
         
     - name: Test executable
       run: |
-        cd dist
-        dir
-        echo "测试exe文件是否存在..."
-        if (Test-Path "PDF下载器.exe") {
-          echo "✅ exe文件生成成功"
-          Get-ItemProperty "PDF下载器.exe" | Select-Object Name, Length
+        if (Test-Path "dist/PDF下载器.exe") {
+          Write-Host "✅ exe文件生成成功"
+          Get-ItemProperty "dist/PDF下载器.exe" | Select-Object Name, Length
         } else {
-          echo "❌ exe文件未找到"
+          Write-Host "❌ exe文件未找到"
           exit 1
         }
       shell: pwsh
       
     - name: Create release package
       run: |
-        # 创建完整的发布包
-        mkdir release
-        Copy-Item "dist\PDF下载器.exe" "release\"
-        Copy-Item "test_urls.xlsx" "release\" -ErrorAction SilentlyContinue
-        Copy-Item "urls.xlsx" "release\" -ErrorAction SilentlyContinue
-        Copy-Item "使用说明.txt" "release\" -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path "release" -Force
+        Copy-Item "dist/PDF下载器.exe" "release/" -Force
+        Copy-Item "test_urls.xlsx" "release/" -Force -ErrorAction SilentlyContinue
+        Copy-Item "urls.xlsx" "release/" -Force -ErrorAction SilentlyContinue
         
-        # 创建Windows使用说明
-        $content = @"
-        PDF下载器 Windows版使用说明
-        ============================
+        $readmeContent = "PDF下载器 Windows版使用说明`n============================`n`n使用方法：`n1. 将 PDF下载器.exe 和 Excel文件放在同一文件夹`n2. 双击运行 PDF下载器.exe`n3. 下载的文件会保存在 pdf_dl 文件夹中`n`nExcel文件要求：`n- 文件名：urls.xlsx 或 test_urls.xlsx`n- 第一列：PDF下载链接`n- 第二列：文件名（可选）`n`n注意事项：`n- 如果杀毒软件误报，请添加到白名单`n- 确保网络连接正常`n- 程序支持并发下载，请耐心等待`n`n生成时间：$(Get-Date)"
         
-        使用方法：
-        1. 将 PDF下载器.exe 和 Excel文件放在同一文件夹
-        2. 双击运行 PDF下载器.exe
-        3. 下载的文件会保存在 pdf_dl 文件夹中
+        $readmeContent | Out-File -FilePath "release/README.txt" -Encoding UTF8
         
-        Excel文件要求：
-        - 文件名：urls.xlsx 或 test_urls.xlsx
-        - 第一列：PDF下载链接
-        - 第二列：文件名（可选）
-        
-        注意事项：
-        - 如果杀毒软件误报，请添加到白名单
-        - 确保网络连接正常
-        - 程序支持并发下载，请耐心等待
-        
-        生成时间：$(Get-Date)
-        "@
-        
-        $content | Out-File -FilePath "release\README.txt" -Encoding UTF8
-        
-        echo "发布包内容："
-        Get-ChildItem release
+        Write-Host "发布包内容："
+        Get-ChildItem "release"
       shell: pwsh
       
     - name: Upload Windows executable
