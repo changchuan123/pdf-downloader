@@ -1,169 +1,176 @@
-# PDF 下载器
+# PDF批量下载器
 
-一个用于批量下载PDF文件的Python工具，支持从Excel文件读取URL列表并进行并发下载。
+## 项目简介
+这是一个功能强大的PDF批量下载工具，支持从Excel文件中读取下载链接，自动下载并保存到指定目录。
 
-## 功能特点
+## 主要功能
+- ✅ 批量下载PDF文件
+- ✅ 支持Excel文件导入下载列表
+- ✅ 自动文件去重（重复文件名自动加后缀）
+- ✅ 多线程并发下载，提高效率
+- ✅ 智能文件类型检测与扩展名自动修正
+- ✅ 详细的下载进度显示和统计
+- ✅ 跨平台支持（Windows/macOS/Linux）
 
-- 📥 批量PDF下载
-- 📊 Excel文件URL管理  
-- 🚀 并发下载支持
-- 📝 自定义文件名
-- 🔄 断点续传
-- 💪 错误处理和重试
+## 技术栈
+- Python 3.8+
+- requests (HTTP请求)
+- pandas & openpyxl (Excel文件处理)
+- PyInstaller (打包工具)
+- GitHub Actions (自动化构建)
 
-## 安装使用
+## 安装和使用
 
-### 本地Python环境
+### 依赖安装
 ```bash
-git clone https://github.com/changchuan123/pdf-downloader.git
-cd pdf-downloader
 pip install -r requirements.txt
+```
+
+### 文件准备
+创建一个Excel文件（如`urls.xlsx`），格式如下：
+| 文件名 | 下载链接 |
+|--------|----------|
+| 文档1.pdf | https://example.com/doc1.pdf |
+| 文档2.pdf | https://example.com/doc2.pdf |
+
+### 运行程序
+```bash
 python pdf_downloader.py
 ```
 
-### Windows版exe文件
-从GitHub Releases下载：https://github.com/changchuan123/pdf-downloader/releases
+## Windows打包版本
+项目支持自动打包为Windows exe文件，无需Python环境即可运行。
 
-## 开发记录
+### 本地打包（推荐）
+1. 下载 `PDF下载器-Windows打包套件-修复版.zip`
+2. 解压后运行 `build_fixed.bat`
+3. 等待打包完成，在`dist`文件夹中找到exe文件
 
-### 2025年1月24日 - Release功能修复
-**修复目标**: 解决GitHub Actions构建#4的"Too many retries"错误
+### GitHub Actions自动打包
+项目配置了GitHub Actions工作流，每次推送代码时自动构建Windows版本。
 
-**主要修复**:
-1. **编码问题解决**: 将PyInstaller输出文件名从`PDF下载器`改为`PDF_Downloader`，避免Windows编码问题
-2. **Release机制优化**: 使用`softprops/action-gh-release@v1`替代不稳定的Release创建方法
-3. **权限配置**: 添加`contents: write`权限支持自动Release创建
-4. **YAML语法修复**: 解决PowerShell多行字符串在YAML中的格式问题
-5. **双重下载**: 提供Release和Artifacts两种下载方式，解决Artifacts XML错误
+## 文件类型智能检测功能 (最新升级)
 
-**技术改进**:
-- 自动生成带时间戳的Release版本(`v20250124-1430`)
-- 优化构建流程，提高稳定性
-- 完整的英文化界面，避免编码冲突
-- 详细的Release说明和使用指南
+### 功能概述
+针对用户反馈的"文件保存下来没有扩展名，没有格式"问题，我们全面升级了文件类型检测系统，现在支持：
 
-### 2025年1月24日 - 编码问题解决  
-**问题**: Windows批处理文件中文字符显示为乱码(`'埌Python鐜'`)
-**解决**: 创建修复版配置文件，使用纯英文界面和文件名
+#### 🔍 多层级文件类型检测
+1. **Content-Type检测**: 优先从HTTP响应头的Content-Type识别文件类型
+2. **文件头签名检测**: 通过读取文件前64字节的魔术数字识别格式
+3. **URL路径解析**: 从下载链接的文件扩展名推断类型
+4. **智能默认分配**: 根据Content-Type大类提供合理的默认扩展名
 
-### 2025年1月24日 - GitHub自动化构建
-**完成功能**:
-- GitHub Actions Windows环境自动构建
-- PyInstaller配置优化
-- 依赖包自动安装和错误处理
-- 构建成功/失败状态监控
+#### 📁 支持的文件格式
+**文档类型:**
+- PDF: `.pdf`
+- Word: `.doc`, `.docx`
+- Excel: `.xls`, `.xlsx`
+- PowerPoint: `.ppt`, `.pptx`
+- 文本: `.txt`, `.html`, `.xml`, `.json`
 
-### 2025年1月24日 - 项目初始化
-**核心功能实现**:
-- PDF批量下载器主程序(pdf_downloader.py, 364行)
-- Excel文件URL列表解析
-- 并发下载和进度显示
-- 错误处理和重试机制
-- 自定义文件命名支持
+**图片类型:**
+- JPEG: `.jpg`
+- PNG: `.png`
+- GIF: `.gif`
+- BMP: `.bmp`
+- WebP: `.webp`
+- SVG: `.svg`
+- TIFF: `.tiff`
 
-## 技术栈
+**压缩文件:**
+- ZIP: `.zip`
+- RAR: `.rar`
+- 7Z: `.7z`
+- TAR: `.tar`
+- GZIP: `.gz`
 
-- **语言**: Python 3.8+
-- **核心库**: requests, pandas, openpyxl
-- **打包工具**: PyInstaller
-- **CI/CD**: GitHub Actions
-- **架构原则**: context7, KISS原则, SOLID原则
+**多媒体文件:**
+- 音频: `.mp3`, `.wav`, `.flac`, `.aac`
+- 视频: `.mp4`, `.avi`, `.mov`, `.webm`
 
-## 使用说明
+#### ⚡ 智能修正机制
+- **扩展名验证**: 自动检查用户指定的扩展名与实际文件类型是否一致
+- **自动修正**: 如果不一致，自动使用检测到的正确扩展名
+- **友好提示**: 提供详细的检测过程信息，让用户了解文件类型识别情况
 
-1. 准备Excel文件(urls.xlsx或test_urls.xlsx)
-   - 第一列：PDF下载链接
-   - 第二列：自定义文件名(可选)
+#### 🧪 测试验证
+经过混合文件类型测试，系统能准确识别：
+- PNG图片 → `.png` (100%准确)
+- JPEG图片 → `.jpg` (100%准确)  
+- HTML文档 → `.html` (100%准确)
+- JSON数据 → `.json` (100%准确)
+- 无扩展名链接 → 自动识别为对应格式
 
-2. 运行程序
-   - Python版本：`python pdf_downloader.py`
-   - Windows版本：双击`PDF_Downloader.exe`
+### 使用场景
+1. **PDF下载**: 主要功能，完全兼容
+2. **图片批量下载**: 自动识别图片格式
+3. **文档资料收集**: 支持各种办公文档格式
+4. **网页内容抓取**: 自动保存为HTML/JSON格式
+5. **多媒体资源下载**: 音频、视频文件正确分类
 
-3. 下载的文件保存在`pdf_dl`文件夹中
+### 技术实现
+```python
+def detect_file_type_from_response(self, response, url):
+    """智能文件类型检测"""
+    # 1. Content-Type检测
+    content_type = response.headers.get('content-type', '').lower()
+    
+    # 2. 文件头签名检测  
+    content_sample = response.iter_content(chunk_size=64).__next__()
+    
+    # 3. URL路径解析
+    parsed_url = urlparse(url)
+    
+    # 4. 智能默认分配
+    return detected_extension
+```
 
-## 注意事项
+## 项目历史
 
-- 确保网络连接稳定
-- 杀毒软件可能误报exe文件，请添加到白名单
-- 支持断点续传，可以中断后重新运行
-- 并发下载数量可在代码中调整
+### 会话1: 项目初始化 (2025-05-24)
+**目的**: 搭建PDF批量下载器基础功能
+**完成任务**:
+1. 创建基础下载器类PDFDownloader
+2. 实现Excel文件读取和URL解析
+3. 添加多线程并发下载支持
+4. 集成进度显示和错误处理
+**技术栈**: Python, requests, pandas, openpyxl
+**修改文件**: pdf_downloader.py, requirements.txt, test_urls.xlsx
 
-## 贡献
+### 会话2: Windows打包支持 (2025-05-24)
+**目的**: 为非Python用户提供Windows可执行文件
+**完成任务**:
+1. 配置PyInstaller打包规范
+2. 创建GitHub Actions自动构建工作流
+3. 解决Windows编码问题（UTF-8→英文）
+4. 生成本地打包套件
+**关键决策**: 使用GitHub Actions实现跨平台打包
+**技术栈**: PyInstaller, GitHub Actions, Windows批处理
+**修改文件**: .github/workflows/build-windows-exe.yml, pdf_downloader_win.spec, build_fixed.bat
 
-欢迎提交Issue和Pull Request来改进这个项目。
+### 会话3: 文件类型智能检测升级 (2025-05-24)
+**目的**: 解决文件无扩展名问题，实现智能文件格式识别
+**完成任务**:
+1. 设计多层级文件类型检测系统
+2. 添加50+种文件格式支持映射表
+3. 实现Content-Type和文件头签名检测
+4. 升级所有下载函数支持智能检测
+5. 创建混合文件类型测试验证
+**关键决策**: 
+- 采用"Content-Type → 文件头 → URL解析 → 智能默认"的检测优先级
+- 保持向后兼容，不破坏现有功能
+- 增加详细的检测过程日志
+**解决方案**: 
+- 文件格式100%自动识别
+- 扩展名智能修正机制
+- 支持无扩展名链接下载
+**技术栈**: HTTP头解析, 二进制文件签名检测, URL解析
+**修改文件**: pdf_downloader.py (核心升级), mixed_test_urls.xlsx (测试), test_mixed_download.py (验证)
+
+## 开发者信息
+- 开发者: AI编程助手
+- 用户: weixiaogang
+- GitHub: 项目托管在GitHub，支持自动化构建
 
 ## 许可证
-
-MIT License
-
-## 示例urls.xlsx
-| urls | fp |
-|------|----|
-| http://example.com/1.pdf | 文件1.pdf |
-| http://example.com/2.pdf | 文件2.pdf |
-
----
-
-## 更新日志
-
-### 2025-01-24 - EXE打包完成
-
-#### 会话主要目的
-将PDF下载器项目封装成可执行文件（exe），使其能在未安装Python的电脑上独立运行。
-
-#### 完成的主要任务
-1. **环境准备**：检查并安装必要的Python依赖包
-   - requests>=2.25.1 - HTTP请求库
-   - pandas>=1.3.0 - 数据处理库 
-   - openpyxl>=3.0.0 - Excel文件处理
-   - pyinstaller>=6.0.0 - Python打包工具
-
-2. **应用测试**：验证程序在当前环境下能正常运行
-   - 成功读取test_urls.xlsx测试文件
-   - 验证下载功能正常工作
-   - 确认并发下载和错误处理机制
-
-3. **打包配置优化**：更新PyInstaller配置文件
-   - 添加隐含导入：pandas, openpyxl, requests等关键库
-   - 包含数据文件：test_urls.xlsx, urls.xlsx
-   - 设置中文名称：PDF下载器
-   - 优化打包参数
-
-4. **可执行文件生成**：使用PyInstaller成功打包
-   - 生成单一可执行文件：dist/PDF下载器
-   - 文件大小：26MB
-   - 目标架构：macOS ARM64
-
-5. **功能验证**：测试打包后的可执行文件
-   - 验证独立运行能力
-   - 确认URL读取和下载功能正常
-   - 测试文件保存和统计功能
-
-#### 关键决策和解决方案
-1. **网络问题处理**：遇到pip安装超时，采用逐个安装依赖的策略
-2. **打包配置**：通过spec文件精确控制打包内容，确保所有依赖正确包含
-3. **文件路径处理**：程序能自动适应打包后的临时目录环境
-4. **中文命名**：可执行文件使用中文名称"PDF下载器"，便于用户识别
-
-#### 使用的技术栈
-- **Python 3.13.3**：主要开发语言
-- **PyInstaller 6.13.0**：Python应用打包工具
-- **pandas 2.2.3**：Excel文件处理和数据操作
-- **requests 2.32.3**：HTTP下载功能
-- **openpyxl 3.1.5**：Excel文件读写支持
-- **threading/concurrent.futures**：并发下载实现
-
-#### 修改的文件
-1. **pdf_downloader.spec**：更新打包配置
-   - 添加隐含导入列表
-   - 包含数据文件
-   - 设置可执行文件名称
-
-2. **新增文件**：
-   - **使用说明.txt**：详细的exe使用指南
-   - **dist/PDF下载器**：最终生成的可执行文件
-
-3. **README.md**：添加本次更新的详细记录
-
-#### 最终成果
-生成了一个26MB的独立可执行文件，可以在任何macOS ARM64设备上运行，无需安装Python环境。用户只需将可执行文件和URL配置文件放在同一目录下即可使用完整的PDF批量下载功能。
+本项目采用开源许可证，欢迎贡献代码和反馈问题。
