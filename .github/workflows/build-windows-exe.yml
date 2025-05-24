@@ -10,7 +10,9 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    
+    permissions:
+      contents: write  # 允许创建Release
+      
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -31,9 +33,9 @@ jobs:
         
     - name: Test executable
       run: |
-        if (Test-Path "dist/PDF下载器.exe") {
+        if (Test-Path "dist/PDF_Downloader.exe") {
           Write-Host "✅ exe文件生成成功"
-          Get-ItemProperty "dist/PDF下载器.exe" | Select-Object Name, Length
+          Get-ItemProperty "dist/PDF_Downloader.exe" | Select-Object Name, Length
         } else {
           Write-Host "❌ exe文件未找到"
           exit 1
@@ -43,32 +45,72 @@ jobs:
     - name: Create release package
       run: |
         New-Item -ItemType Directory -Path "release" -Force
-        Copy-Item "dist/PDF下载器.exe" "release/" -Force
+        Copy-Item "dist/PDF_Downloader.exe" "release/" -Force
         Copy-Item "test_urls.xlsx" "release/" -Force -ErrorAction SilentlyContinue
         Copy-Item "urls.xlsx" "release/" -Force -ErrorAction SilentlyContinue
         
-        $readmeContent = "PDF下载器 Windows版使用说明`n============================`n`n使用方法：`n1. 将 PDF下载器.exe 和 Excel文件放在同一文件夹`n2. 双击运行 PDF下载器.exe`n3. 下载的文件会保存在 pdf_dl 文件夹中`n`nExcel文件要求：`n- 文件名：urls.xlsx 或 test_urls.xlsx`n- 第一列：PDF下载链接`n- 第二列：文件名（可选）`n`n注意事项：`n- 如果杀毒软件误报，请添加到白名单`n- 确保网络连接正常`n- 程序支持并发下载，请耐心等待`n`n生成时间：$(Get-Date)"
+        $readmeContent = "PDF Downloader Windows Version Usage Guide`n==========================================`n`nHow to use:`n1. Place PDF_Downloader.exe and Excel file in the same folder`n2. Double-click to run PDF_Downloader.exe`n3. Downloaded files will be saved in pdf_dl folder`n`nExcel file requirements:`n- Filename: urls.xlsx or test_urls.xlsx`n- Column 1: PDF download links`n- Column 2: Custom filename (optional)`n`nNotes:`n- Add to antivirus whitelist if flagged`n- Ensure stable internet connection`n- Support concurrent downloads, please be patient`n`nGenerated: $(Get-Date)"
         
         $readmeContent | Out-File -FilePath "release/README.txt" -Encoding UTF8
         
-        Write-Host "发布包内容："
+        Write-Host "Release package contents:"
         Get-ChildItem "release"
       shell: pwsh
       
-    - name: Upload Windows executable
+    - name: Create ZIP package
+      run: |
+        $timestamp = Get-Date -Format 'yyyyMMdd-HHmm'
+        $zipName = "PDF-Downloader-Windows-v$timestamp.zip"
+        Compress-Archive -Path "release/*" -DestinationPath $zipName
+        Write-Host "ZIP package created: $zipName"
+        
+        echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+        echo "RELEASE_TAG=v$timestamp" >> $env:GITHUB_ENV
+      shell: pwsh
+      
+    - name: Upload Artifacts (backup method)
       uses: actions/upload-artifact@v4
       with:
-        name: PDF下载器-Windows-exe
+        name: PDF-Downloader-Windows-exe
         path: release/
         retention-days: 30
         
-    - name: Create ZIP package
-      run: |
-        Compress-Archive -Path "release/*" -DestinationPath "PDF下载器-Windows-v$(Get-Date -Format 'yyyyMMdd-HHmm').zip"
-        Write-Host "ZIP包已创建："
-        Get-ChildItem "*.zip"
-      shell: pwsh
-      
+    - name: Create Release
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: PDF Downloader Windows v${{ env.RELEASE_TAG }}
+        body: |
+          🎉 PDF下载器 Windows版 自动构建完成！
+          
+          ## 📦 下载说明
+          - **PDF_Downloader.exe** - Windows可执行文件 (无需Python环境)
+          - **README.txt** - 详细使用说明
+          - **test_urls.xlsx** - 示例Excel文件
+          
+          ## 🚀 使用方法
+          1. 下载 `PDF_Downloader.exe` 
+          2. 准备包含PDF链接的Excel文件 (urls.xlsx)
+          3. 将exe和Excel放在同一文件夹
+          4. 双击运行exe文件
+          
+          ## ⚠️ 注意事项
+          - 如果杀毒软件误报，请添加到白名单
+          - 确保网络连接稳定
+          - 支持并发下载，耐心等待完成
+          
+          构建时间: ${{ github.run_started_at }}
+          提交SHA: ${{ github.sha }}
+        files: |
+          ${{ env.ZIP_NAME }}
+          release/PDF_Downloader.exe
+          release/README.txt
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Upload build logs
       uses: actions/upload-artifact@v4
       if: always()

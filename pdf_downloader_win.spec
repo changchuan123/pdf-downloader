@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Windows版本PyInstaller配置文件
+# Windows version PyInstaller configuration file - fix encoding issues
 
 import sys
 from pathlib import Path
@@ -40,7 +40,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='PDF下载器',
+    name='PDF_Downloader',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -55,4 +55,4 @@ exe = EXE(
     entitlements_file=None,
     icon=None,
     version_file=None,
-) 
+)
