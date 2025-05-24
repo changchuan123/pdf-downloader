@@ -39,7 +39,7 @@ class PDFDownloader:
         self.filename_counter = {}
         
     def get_filename_from_url(self, url):
-        """从URL中提取文件名"""
+        """从URL中提取文件名，保持原始扩展名"""
         parsed_url = urlparse(url)
         filename = os.path.basename(unquote(parsed_url.path))
         
@@ -48,13 +48,43 @@ class PDFDownloader:
             # 使用域名加上路径的hash作为文件名
             domain = parsed_url.netloc.replace('www.', '').replace('.', '_')
             url_hash = abs(hash(url)) % 10000
-            filename = f"{domain}_{url_hash}.pdf"
+            filename = f"{domain}_{url_hash}.bin"  # 未知类型默认.bin
         
-        # 确保有扩展名
-        if not filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.jpg', '.png', '.gif')):
-            filename += '.pdf'
-            
         return filename
+    
+    def get_file_extension_from_content_type(self, content_type):
+        """根据Content-Type获取正确的文件扩展名（仅在URL无扩展名时使用）"""
+        content_type = content_type.lower()
+        
+        if 'application/pdf' in content_type:
+            return '.pdf'
+        elif 'image/jpeg' in content_type or 'image/jpg' in content_type:
+            return '.jpg'
+        elif 'image/png' in content_type:
+            return '.png'
+        elif 'image/gif' in content_type:
+            return '.gif'
+        elif 'image/webp' in content_type:
+            return '.webp'
+        elif 'text/plain' in content_type:
+            return '.txt'
+        elif 'text/html' in content_type:
+            return '.html'
+        elif 'application/json' in content_type:
+            return '.json'
+        elif 'application/zip' in content_type:
+            return '.zip'
+        else:
+            return '.bin'  # 未知类型使用.bin
+    
+    def get_final_filename(self, custom_name, url):
+        """获取最终文件名：优先使用URL扩展名，无扩展名时保持原样"""
+        if custom_name:
+            # 使用自定义文件名，结合URL的扩展名
+            return self.combine_filename_with_url_extension(custom_name, url)
+        else:
+            # 直接从URL提取文件名
+            return self.get_filename_from_url(url)
     
     def get_unique_filename(self, base_filename):
         """获取唯一的文件名，处理重复情况"""
@@ -76,68 +106,119 @@ class PDFDownloader:
                 return new_filename
             counter += 1
     
-    def download_single_pdf(self, url):
-        """
-        下载单个PDF文件，使用URL自动提取的文件名
+    def download_pdf(self, url, max_retries=3):
+        """下载单个文件，保持原始扩展名"""
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+                
+                response = requests.get(url, headers=headers, timeout=30, stream=True)
+                response.raise_for_status()
+                
+                # 从URL获取文件名（保持原始扩展名）
+                filename = self.get_final_filename(None, url)
+                
+                # 生成唯一文件名
+                unique_filename = self.get_unique_filename(filename)
+                file_path = self.download_folder / unique_filename
+                
+                # 保存文件
+                with open(file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                print(f"成功下载: {unique_filename}")
+                return True
+                
+            except requests.exceptions.Timeout:
+                print(f"下载超时 (尝试 {attempt + 1}/{max_retries}): {url}")
+                if attempt == max_retries - 1:
+                    print(f"下载失败 - 超时: {url}")
+                    return False
+                time.sleep(2)
+                
+            except requests.exceptions.RequestException as e:
+                print(f"下载失败 (尝试 {attempt + 1}/{max_retries}): {url} - {str(e)}")
+                if attempt == max_retries - 1:
+                    return False
+                time.sleep(2)
+                
+            except Exception as e:
+                print(f"未知错误: {url} - {str(e)}")
+                return False
         
-        Args:
-            url (str): PDF文件的下载链接
-        
-        Returns:
-            tuple: (成功标志, 文件路径或错误信息)
-        """
+        return False
+    
+    def download_from_excel(self, excel_file):
+        """从Excel文件批量下载文件，使用指定的文件名 + URL扩展名"""
         try:
-            # 从URL提取文件名
-            filename = self.get_filename_from_url(url)
+            # 读取Excel文件
+            df = pd.read_excel(excel_file, header=None)
             
-            # 获取唯一文件名（处理重复）
-            unique_filename = self.get_unique_filename(filename)
-            file_path = self.download_folder / unique_filename
+            if len(df.columns) < 2:
+                print("错误：Excel文件至少需要两列（第一列：文件名，第二列：URL）")
+                return
             
-            print(f"正在下载: {url}")
-            print(f"保存为: {unique_filename}")
+            # 第一列是文件名，第二列是URL
+            filenames = df.iloc[:, 0].tolist()
+            urls = df.iloc[:, 1].tolist()
             
-            # 发送请求下载文件
-            response = self.session.get(url, stream=True, timeout=30)
-            response.raise_for_status()
+            print(f"从Excel读取到 {len(urls)} 个下载任务")
+            print("文件命名规则：使用Excel指定文件名 + URL中的扩展名")
             
-            # 检查Content-Type并确定文件扩展名
-            content_type = response.headers.get('content-type', '').lower()
+            success_count = 0
             
-            # 根据Content-Type调整扩展名
-            if 'application/pdf' in content_type or 'pdf' in content_type:
-                if not unique_filename.lower().endswith('.pdf'):
-                    unique_filename = f"{Path(unique_filename).stem}.pdf"
+            for i, (filename, url) in enumerate(zip(filenames, urls), 1):
+                if pd.isna(url) or not str(url).strip():
+                    print(f"跳过第 {i} 行：URL为空")
+                    continue
+                
+                if pd.isna(filename) or not str(filename).strip():
+                    print(f"跳过第 {i} 行：文件名为空")
+                    continue
+                
+                url = str(url).strip()
+                filename = str(filename).strip()
+                
+                print(f"\n[{i}/{len(urls)}] 下载: {filename}")
+                print(f"URL: {url}")
+                
+                try:
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                    
+                    response = requests.get(url, headers=headers, timeout=30, stream=True)
+                    response.raise_for_status()
+                    
+                    # 组合文件名：Excel指定名称 + URL扩展名
+                    final_filename = self.get_final_filename(filename, url)
+                    
+                    # 生成唯一文件名
+                    unique_filename = self.get_unique_filename(final_filename)
                     file_path = self.download_folder / unique_filename
-            elif 'image/jpeg' in content_type or 'image/jpg' in content_type:
-                if not unique_filename.lower().endswith(('.jpg', '.jpeg')):
-                    unique_filename = f"{Path(unique_filename).stem}.jpg"
-                    file_path = self.download_folder / unique_filename
-            elif 'image/png' in content_type:
-                if not unique_filename.lower().endswith('.png'):
-                    unique_filename = f"{Path(unique_filename).stem}.png"
-                    file_path = self.download_folder / unique_filename
+                    
+                    # 保存文件
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    
+                    print(f"成功: {unique_filename}")
+                    success_count += 1
+                    
+                except Exception as e:
+                    print(f"失败: {str(e)}")
+                    continue
             
-            # 保存文件
-            with open(file_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            
-            file_size = file_path.stat().st_size
-            print(f"下载完成: {unique_filename} ({file_size} bytes)")
-            
-            return True, str(file_path)
-            
-        except requests.exceptions.RequestException as e:
-            error_msg = f"下载失败 {url}: 网络错误 - {str(e)}"
-            print(error_msg)
-            return False, error_msg
+            print(f"\n下载完成！成功: {success_count}, 失败: {len(urls) - success_count}")
             
         except Exception as e:
-            error_msg = f"下载失败 {url}: {str(e)}"
-            print(error_msg)
-            return False, error_msg
+            print(f"读取Excel文件时出错: {str(e)}")
+            print("请确保Excel文件格式正确：第一列文件名，第二列URL")
     
     def download_from_list(self, url_list):
         """
@@ -156,7 +237,7 @@ class PDFDownloader:
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # 提交所有任务
             future_to_url = {
-                executor.submit(self.download_single_pdf, url): url
+                executor.submit(self.download_pdf, url): url
                 for url in url_list
             }
             
@@ -164,7 +245,7 @@ class PDFDownloader:
             for future in as_completed(future_to_url):
                 url = future_to_url[future]
                 try:
-                    success, result = future.result()
+                    success = future.result()
                     if success:
                         self.success_count += 1
                     else:
@@ -195,144 +276,50 @@ class PDFDownloader:
         except Exception as e:
             print(f"读取URL文件失败: {str(e)}")
     
-    def download_from_excel(self, excel_path):
-        """
-        从Excel文件读取文件名和URL列表并下载
-        第一列：文件名，第二列：URL
-        
-        Args:
-            excel_path (str): Excel文件路径
-        """
-        try:
-            # 读取Excel文件，不将第一行作为表头，指定引擎
-            df = pd.read_excel(excel_path, header=None, engine='openpyxl')
-            
-            # 检查数据是否有效
-            if len(df) == 0:
-                print("❌ 错误: Excel文件为空")
-                return
-            
-            # 第一列为文件名，第二列为URL
-            urls = []
-            filenames = []
-            
-            # 处理每一行数据
-            for index, row in df.iterrows():
-                filename_cell = row[0] if 0 in row else None
-                url_cell = row[1] if 1 in row else None
-                
-                # 检查URL是否有效
-                if pd.isna(url_cell) or not str(url_cell).strip():
-                    print(f"⚠️  跳过第{index+1}行：URL为空")
-                    continue
-                
-                # 处理文件名
-                if pd.isna(filename_cell) or not str(filename_cell).strip():
-                    # 如果文件名为空，从URL自动提取
-                    filename = self.get_filename_from_url(str(url_cell).strip())
-                    print(f"📝 第{index+1}行文件名为空，自动提取为: {filename}")
-                else:
-                    filename = str(filename_cell).strip()
-                    # 确保有扩展名
-                    if not filename.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.jpg', '.png', '.gif')):
-                        filename += '.pdf'
-                
-                urls.append(str(url_cell).strip())
-                filenames.append(filename)
-            
-            print(f"从Excel文件 {excel_path} 读取到 {len(urls)} 个下载任务")
-            print("📝 文件命名: 使用Excel第一列指定的文件名")
-            print("📝 重复文件: 自动添加-1、-2、-3等后缀")
-            
-            # 开始下载
-            self.download_from_list_with_names(urls, filenames)
-            
-        except Exception as e:
-            print(f"读取Excel文件失败: {str(e)}")
-            print("请确保Excel文件格式正确：第一列为文件名，第二列为URL")
-    
     def download_from_list_with_names(self, url_list, filename_list):
-        """
-        从URL列表和文件名列表批量下载
+        """使用指定文件名批量下载文件，保持URL原始扩展名"""
+        if not url_list:
+            print("URL列表为空")
+            return
         
-        Args:
-            url_list (list): PDF下载链接列表
-            filename_list (list): 对应的文件名列表
-        """
-        print(f"开始批量下载 {len(url_list)} 个文件...")
-        print(f"保存目录: {self.download_folder.absolute()}")
-        print(f"文件命名: 使用指定的文件名")
-        print(f"并发数: {self.max_workers}")
-        print("-" * 50)
+        print(f"开始下载 {len(url_list)} 个文件（最大 {self.max_workers} 个并发）...")
+        print("文件命名规则：使用指定文件名 + URL中的扩展名")
         
-        # 使用线程池并发下载
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # 提交所有任务
-            future_to_task = {
-                executor.submit(self.download_single_pdf_with_name, url, filename): (url, filename)
-                for url, filename in zip(url_list, filename_list)
-            }
-            
-            # 处理完成的任务
-            for future in as_completed(future_to_task):
-                url, filename = future_to_task[future]
-                try:
-                    success, result = future.result()
-                    if success:
-                        self.success_count += 1
-                    else:
-                        self.failed_count += 1
-                        self.failed_urls.append(url)
-                except Exception as e:
-                    self.failed_count += 1
-                    self.failed_urls.append(url)
-                    print(f"任务执行异常 {url}: {str(e)}")
+        # 重置计数器
+        self.success_count = 0
+        self.failed_count = 0
+        
+        # 逐个下载（简化逻辑）
+        for url, filename in zip(url_list, filename_list):
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                
+                response = requests.get(url, headers=headers, timeout=30, stream=True)
+                response.raise_for_status()
+                
+                # 组合文件名：指定名称 + URL扩展名
+                final_filename = self.get_final_filename(filename, url)
+                
+                # 生成唯一文件名
+                unique_filename = self.get_unique_filename(final_filename)
+                file_path = self.download_folder / unique_filename
+                
+                # 保存文件
+                with open(file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                print(f"成功: {unique_filename}")
+                self.success_count += 1
+                
+            except Exception as e:
+                print(f"失败: {filename} - {str(e)}")
+                self.failed_count += 1
         
         self.print_summary()
-    
-    def download_single_pdf_with_name(self, url, filename):
-        """
-        下载单个文件，使用指定的文件名
-        
-        Args:
-            url (str): 文件下载链接
-            filename (str): 指定的文件名
-        
-        Returns:
-            tuple: (成功标志, 文件路径或错误信息)
-        """
-        try:
-            # 获取唯一文件名（处理重复）
-            unique_filename = self.get_unique_filename(filename)
-            file_path = self.download_folder / unique_filename
-            
-            print(f"正在下载: {url}")
-            print(f"保存为: {unique_filename}")
-            
-            # 发送请求下载文件
-            response = self.session.get(url, stream=True, timeout=30)
-            response.raise_for_status()
-            
-            # 保存文件
-            with open(file_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            
-            file_size = file_path.stat().st_size
-            print(f"下载完成: {unique_filename} ({file_size} bytes)")
-            
-            return True, str(file_path)
-            
-        except requests.exceptions.RequestException as e:
-            error_msg = f"下载失败 {url}: 网络错误 - {str(e)}"
-            print(error_msg)
-            return False, error_msg
-            
-        except Exception as e:
-            error_msg = f"下载失败 {url}: {str(e)}"
-            print(error_msg)
-            return False, error_msg
 
     def print_summary(self):
         """打印下载统计信息"""
@@ -347,65 +334,75 @@ class PDFDownloader:
             for url in self.failed_urls:
                 print(f"  - {url}")
 
+    def combine_filename_with_url_extension(self, custom_name, url):
+        """将自定义文件名与URL的扩展名组合"""
+        # 从URL获取原始文件名和扩展名
+        parsed_url = urlparse(url)
+        url_filename = os.path.basename(unquote(parsed_url.path))
+        
+        # 获取URL中的扩展名
+        if url_filename and '.' in url_filename:
+            url_extension = os.path.splitext(url_filename)[1]
+        else:
+            url_extension = ''
+        
+        # 移除自定义文件名中可能存在的扩展名
+        custom_base = os.path.splitext(custom_name)[0]
+        
+        # 组合：自定义文件名 + URL的扩展名
+        if url_extension:
+            return f"{custom_base}{url_extension}"
+        else:
+            # 如果URL没有扩展名，保持自定义文件名原样
+            return custom_name
 
-# 使用示例
-if __name__ == "__main__":
-    # 修复文件路径问题：获取exe所在目录或当前工作目录
-    if getattr(sys, 'frozen', False):
-        # 如果是打包后的exe文件
-        project_path = os.path.dirname(sys.executable)
-    else:
-        # 如果是Python脚本
-        project_path = os.path.dirname(os.path.abspath(__file__))
-    
-    # 如果上述路径在临时目录中，使用当前工作目录
-    if "Temp" in project_path or "temp" in project_path or "_MEI" in project_path:
-        project_path = os.getcwd()
-    
-    # 优先使用测试文件
-    test_file = os.path.join(project_path, "test_urls.xlsx")
-    if os.path.exists(test_file):
-        urls_file = test_file
-    else:
-        urls_file = os.path.join(project_path, "urls.xlsx")
-    
-    # 创建按时间戳命名的下载文件夹
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    download_folder = os.path.join(project_path, f"下载_{current_time}")
-    
-    # 检查必要文件是否存在
-    if not os.path.exists(urls_file):
-        print(f"❌ 错误: 未找到Excel文件")
-        print(f"请在程序目录创建以下文件之一:")
-        print(f"  - test_urls.xlsx (测试文件)")
-        print(f"  - urls.xlsx (正式文件)")
-        print(f"当前目录: {project_path}")
-        print("\nExcel文件格式要求:")
-        print("  第一列: 文件名")
-        print("  第二列: 下载链接URL")
-        input("按回车键退出...")
-        exit(1)
-    
-    print("PDF批量下载工具")
-    print("=" * 50)
-    print(f"程序目录: {project_path}")
-    print(f"Excel文件: {urls_file}")
-    print(f"下载目录: {download_folder}")
-    print(f"下载时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("-" * 50)
+def main():
+    print("=== 文件批量下载器 ===")
     
     # 创建下载器实例
-    downloader = PDFDownloader(
-        download_folder=download_folder,
-        max_workers=3  # 并发下载数
-    )
+    downloader = PDFDownloader()
     
-    # 直接使用Excel文件下载
-    if urls_file.lower().endswith(('.xlsx', '.xls')):
-        downloader.download_from_excel(urls_file)
-    else:
-        downloader.download_from_file(urls_file)
-    
-    print("\n✅ 下载任务完成！")
-    print(f"文件保存在: {download_folder}")
-    input("按回车键退出...")
+    while True:
+        print("\n选择操作:")
+        print("1. 从Excel文件批量下载")
+        print("2. 从URL文件批量下载")
+        print("3. 手动输入URL下载")
+        print("4. 退出")
+        
+        choice = input("\n请输入选择 (1-4): ").strip()
+        
+        if choice == '1':
+            excel_file = input("请输入Excel文件路径（或直接回车使用当前目录下的test_urls.xlsx）: ").strip()
+            if not excel_file:
+                excel_file = "test_urls.xlsx"
+                
+            if not os.path.exists(excel_file):
+                print(f"文件不存在: {excel_file}")
+                continue
+                
+            downloader.download_from_excel(excel_file)
+            
+        elif choice == '2':
+            url_file = input("请输入URL文件路径: ").strip()
+            if not url_file or not os.path.exists(url_file):
+                print("文件不存在")
+                continue
+                
+            downloader.download_from_file(url_file)
+            
+        elif choice == '3':
+            url = input("请输入要下载的URL: ").strip()
+            if url:
+                downloader.download_pdf(url)
+            else:
+                print("URL不能为空")
+                
+        elif choice == '4':
+            print("退出程序")
+            break
+            
+        else:
+            print("无效选择，请重新输入")
+
+if __name__ == "__main__":
+    main()
